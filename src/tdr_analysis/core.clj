@@ -27,9 +27,6 @@
 
 (def col-heads (get-col-heads))
 
-(defn idxs [& fields]
-	(into [] (for [f fields] (col-heads f))))
-
 (defn cleanse-csv [f v]
 	(try
 		(cond
