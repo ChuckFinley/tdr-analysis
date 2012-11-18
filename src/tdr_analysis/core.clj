@@ -31,11 +31,13 @@
 	(into [] (for [f fields] (col-heads f))))
 
 (defn cleanse-csv [f v]
-	(cond
-		(= f :datetime)
-			(let [[M D Y h m s] (map #(Integer. %) (re-seq #"\d+" v))]
-				(time.coerce/to-long (time/date-time (+ 2000 Y) M D h m s)))
-		:else (read-string v)))
+	(try
+		(cond
+			(= f :datetime)
+				(let [[M D Y h m s] (map #(Integer. %) (re-seq #"\d+" v))]
+					(time.coerce/to-long (time/date-time (+ 2000 Y) M D h m s)))
+			:else (read-string v))
+		(catch Exception e nil)))
 
 (defn csv-tuples
 	"fields => vector of keyword identifiers for csv fields.
@@ -46,15 +48,26 @@
 		(with-open [csv-file (io/reader filename)]
 			(doall
 				(next
-					(for [row (parse-csv csv-file)]
-						(into []
-							(for [f fields]
-								(try
-									(cleanse-csv f (row (col-heads f)))
-									(catch Exception e))))))))))
+					(for [row (parse-csv csv-file)
+								:let [tuple
+											(for [f fields]
+												(cleanse-csv f (row (col-heads f))))]
+								:when (every? identity tuple)]
+						(into [] tuple)))))))
+
+(defn normalize-datetime
+	"Reduce datetime to seconds since beginning of log and drop milliseconds"
+	[t]
+	(let [t0 (reduce min (map first t))]
+		(map (fn [[t p]] [(/ (- t t0) 1000) p]) t)))
+
+(def time-pres
+	(normalize-datetime (csv-tuples [:datetime :pressure])))
 
 (defn slope [[x1 y1] [x0 y0]]
-	(/ (- x1 x0) (- y1 y0)))
+	(cond
+		(= x1 x0) 0.0
+		:else (/ (- y1 y0) (- x1 x0))))
 
 (defn seq-slope
 	"t => sequence of tuples e.g. ([x0 y0] [x1 y1]). Must be sorted by x.
