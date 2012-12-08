@@ -1,18 +1,32 @@
 # tdr-analysis
 
-The final goal is to create a summary of a collection of logs. What goes in the summary? That's a good question. Some ideas are:
-* Number of dives
-* Number of dive bouts
-* Dives per bout
-* And on a per dive basis:
-  * Time elapsed
-  * Max depth
-  * Time at bottom
-  * Time descending/ascending
+This project is an implementation of the Halsey, Bost, Handrich algorithm (see here: http://www.cebc.cnrs.fr/publipdf/2007/HPB30.pdf). It analyzes the data from a temperature and depth recorder. Currently, it calculates the following variables:
 
+*	Vertical velocity
+*	Dive index
+*	Per dive:
+	*	Dive start and end
+	*	Maximum depth
+	*	Number of datapoints
+
+When completed, it will also calculate
+*	Per dive:
+	*	Dive bout index
+	*	Elements (wiggles and steps)
+	*	Bottom phase start and end
+	*	Broadness
+	*	Depth range
+	*	Depth consistency
+	*	Symmetry
+	*	Raggedness
+*	Per dive bout
+	*	Bout start and end
+	*	Number of dives
+	*	Inter-dive period
+	*	Inter-bout period
 
 ## Usage
 
-Try it out: `(write-csv (analyze-dives time-pres) "sample-output.csv")`. `time-pres` produces a records table (sequence of hash-maps) from the sample file 10Aug11.csv. Running `analyze-dives` on it adds velocity and motion (ascending, descending, surface, bottom) to the records. `write-csv` demunges the results and spits them to the file of your choosing.
+Try it out: `(analyze-data io/data)` will calculate vertical velocity and dive index. This: `(analyze-dives (analyze-data io/data))` will summarize the dives.
 
 
