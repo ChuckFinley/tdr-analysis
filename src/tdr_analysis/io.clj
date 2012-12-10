@@ -3,7 +3,8 @@
 	(:require [clojure.java.io :as io])
 	(:require [clojure.string :as string])
 	(:require [clj-time.core :as time])
-	(:require [clj-time.coerce :as time.coerce]))
+	(:require [clj-time.coerce :as time.coerce])
+	(:use [tdr-analysis.util]))
 
 (defn parse-csv
 	"Microsoft puts carriage returns at the end of lines in CSV files
@@ -12,42 +13,41 @@
 
 (def sample-file "assets/10Aug11.csv")
 
-(defn cleanse-csv [[k v]]
+(defn clean-value [[k v]]
+	"k => field keyword
+	v => field value
+	Returns the parsed value of v (based on the type of k)"
 	(try
 		(cond
 			(= k :time)
 				(let [[M D Y h m s] (map #(Integer. %) (re-seq #"\d+" v))]
-					[k (time.coerce/to-long (time/date-time (+ 2000 Y) M D h m s))])
-			:else [k (read-string v)])
+					(time.coerce/to-long (time/date-time (+ 2000 Y) M D h m s)))
+			:else (read-string v))
 		(catch Exception e nil)))
 
+(defn clean-row [r]
+	(into {}
+		(for [[k v] (select-across [:time :pressure] (map r [3 4]))] ; [3 4] are the time, pressure indices
+			[k (clean-value [k v])])))
+
 (defn get-file
-	"fields => a set of keyword identifiers for csv fields.
-	Output: a sequence of records for the fields given."
 	([]
 		(get-file sample-file))
 	([filename]
-		(with-open [csv-file (io/reader filename)]
+		(with-open [file (io/reader filename)]
 			(doall
-				(next
-					(for [row (parse-csv csv-file)
-								:let [record
-											(map cleanse-csv {:time (row 3) :pressure (row 4)})]
-								:when (every? identity record)]
-							(into {} record)))))))
-
-(defn update
-	"applies f to value for k in h"
-	[h f k]
-	(if (contains? h k)
-		(assoc h k (f (k h)))
-		h))
+				(next		; Drop the header row
+					(for [row (parse-csv file)
+								:let [r (clean-row row)]
+								:when (every? identity r)]
+						r))))))
 
 (defn normalize-datetime
 	"Reduce datetime to seconds since beginning of log and drop milliseconds"
 	[t]
-	(let [t0 (reduce min (map :time t))]
-		(map (fn [r] (update r #(/ (- % t0) 1000) :time)) t)))
+	(let [t0 (reduce min (map :time t))
+				normalize #(/ (- % t0) 1000)]
+		(map #(manip-map normalize #{:time} %) t)))
 
 (defn strr
 	"Applies str to scalars in a collection recursively (for writing to csv)"

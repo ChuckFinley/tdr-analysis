@@ -37,6 +37,7 @@
 	(for [idx (range (inc (reduce max (map :dive-idx dives))))
 				:let [dive (filter #(= idx (:dive-idx %)) dives)]]
 		{:dive-idx idx
+		:data-points dive
 		:begin-dive (reduce min (map :time dive))
 		:end-dive (reduce max (map :time dive))
 		:max-depth (reduce max (map :pressure dive))
