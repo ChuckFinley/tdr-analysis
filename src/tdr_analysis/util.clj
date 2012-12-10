@@ -14,11 +14,7 @@
 	from all the collections. Stops when the first collection runs
 	out.
 	e.g. [1 2 3] [4 5 6] => ((1 4) (2 5) (3 6))"
-	(let [x (map first colls)
-				xs (map rest colls)]
-		(if (not-any? empty? xs)
-			(cons x (apply select-across xs))
-			(vector x))))
+	(partition (count colls) (apply interleave colls)))
 
 (defn every-nth
 	([n]
