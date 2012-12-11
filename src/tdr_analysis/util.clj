@@ -23,4 +23,7 @@
 		(fn [coll]
 			(map coll (range offset (count coll) n)))))
 
+(defn between [x lower upper]
+	(and (>= x lower) (<= x upper)))
+
 ; how would one do for-across? I think a macro would be needed

@@ -40,17 +40,62 @@
 			(for [[idx part] (select-across dive-idxs dive-parts)]
 				(map #(assoc % :dive-idx idx) part)))))
 
+(defn calculate-thru-0
+	"Calculate which points have velocity pass through 0 (local extrema
+	in pressure with respect to time)"
+	([dive]
+		(loop [result []
+					 data dive
+					 trend 1]
+			(if-let [point (first data)]
+				(let [v (:vert-vel point)]
+					(recur (conj result (assoc point :thru-0 (neg? (* v trend))))
+								 (rest data)
+								 (if (zero? v) trend v)))
+				result))))
+
+(defn find-elements
+	"Splits a dive into elements - wiggles and steps. Wiggles are spans
+	of data points where velocity passes through 0 three times. Steps are
+	not yet implemented."
+	([dive]
+		(let [dive (calculate-thru-0 dive)]
+			(for [element-boundaries
+						(->>	dive
+									(drop-while (complement :thru-0))
+									(filter :thru-0)
+									(partition 3 2))
+						:let [[start middle end] (map :time element-boundaries)]]
+				(filter #(between (:time %) start end) dive)))))
+
+(defn analyze-elements [dive]
+	(for [element (find-elements dive)]
+		{:type :wiggle
+		:begin (reduce min (map :time element))
+		:end (reduce max (map :time element))
+		:amplitude (-
+			(reduce max (map :pressure element))
+			(reduce min (map :pressure element)))
+		:datapoints element}))
+
 (defn analyze-dives [dives]
 	(for [dive (partition-by :dive-idx dives)
-				:let [idx (:dive-idx (first dive))]]
+				:let [idx (:dive-idx (first dive))
+							elements (analyze-elements dive)]]
 		{:dive-idx idx
-		:begin-dive (reduce min (map :time dive))
-		:end-dive (reduce max (map :time dive))
+		:begin (reduce min (map :time dive))
+		:end (reduce max (map :time dive))
 		:max-depth (reduce max (map :pressure dive))
-		:num-datapoints (count dive)}))
+		:num-elements (count elements)
+		:num-datapoints (count dive)
+		:elements elements
+		:datapoints dive}))
 
 (defn analyze-data [data]
 	(-> data
 			calculate-vert-vel
-			calculate-vert-acc
 			calculate-dive-idx))
+
+(defn nth-dive [data n] (first (filter #(= n (:dive-idx %)) (analyze-dives (analyze-data data)))))
+
+
