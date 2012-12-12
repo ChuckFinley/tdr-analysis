@@ -54,29 +54,66 @@
 								 (if (zero? v) trend v)))
 				result))))
 
-(defn find-elements
+(defn find-wiggles
 	"Splits a dive into elements - wiggles and steps. Wiggles are spans
 	of data points where velocity passes through 0 three times. Steps are
 	not yet implemented."
 	([dive]
 		(let [dive (calculate-thru-0 dive)]
-			(for [element-boundaries
+			(for [wiggle-boundaries
 						(->>	dive
 									(drop-while (complement :thru-0))
 									(filter :thru-0)
 									(partition 3 2))
-						:let [[start middle end] (map :time element-boundaries)]]
+						:let [[start middle end] (map :time wiggle-boundaries)]]
+				(filter #(between (:time %) start end) dive)))))
+
+(defn step-vel
+	"Calculate if a point has vertical velocity in the step element range
+	i.e. 0 < vert-vel < Tvert_vel where Tvert_vel = .35"
+	([{v :vert-vel}]
+		(let [Tvert_vel 0.35]
+			(range-case v
+				[< 0]						-1
+				[0 Tvert_vel]		0
+				:else						1))))
+
+(defn step? [r1 r2 r3]
+	(let [[s1 s2 s3] (map #(step-vel (first %)) [r1 r2 r3])]
+		(and (pos? s1) (zero? s2) (pos? s3))))
+
+(defn find-steps
+	"Steps are elements where the vertical velocity dips below Tvert_vel
+	but not below 0"
+	([dive]
+		(for [step-boundaries
+					(->>	dive
+								(partition-by step-vel)
+								(partition 3 1)
+								(filter #(apply step? %))
+								(map second))]
+			(let [start	(:time (first step-boundaries))
+						end		(:time (last step-boundaries))]
 				(filter #(between (:time %) start end) dive)))))
 
 (defn analyze-elements [dive]
-	(for [element (find-elements dive)]
-		{:type :wiggle
-		:begin (reduce min (map :time element))
-		:end (reduce max (map :time element))
-		:amplitude (-
-			(reduce max (map :pressure element))
-			(reduce min (map :pressure element)))
-		:datapoints element}))
+	(sort-by :begin (concat
+		(for [wiggle (find-wiggles dive)]
+			{:type :wiggle
+			:begin (reduce min (map :time wiggle))
+			:end (reduce max (map :time wiggle))
+			:amplitude (-
+				(reduce max (map :pressure wiggle))
+				(reduce min (map :pressure wiggle)))
+			:datapoints wiggle})
+		(for [step (find-steps dive)]
+			{:type :step
+			:begin (reduce min (map :time step))
+			:end (reduce max (map :time step))
+			:amplitude (-
+				(reduce max (map :pressure step))
+				(reduce min (map :pressure step)))
+			:datapoints step}))))
 
 (defn analyze-dives [dives]
 	(for [dive (partition-by :dive-idx dives)
