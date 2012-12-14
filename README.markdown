@@ -8,17 +8,18 @@ This project is an implementation of the Halsey, Bost, Handrich algorithm (see h
 	*	Dive start and end
 	*	Maximum depth
 	*	Number of datapoints
-
-When completed, it will also calculate
-*	Per dive:
-	*	Dive bout index
 	*	Elements (wiggles and steps)
 	*	Bottom phase start and end
 	*	Broadness
 	*	Depth range
-	*	Depth consistency
 	*	Symmetry
 	*	Raggedness
+
+When completed, it will also calculate
+*	Per dive:
+	*	Dive bout index
+	*	Depth consistency
+
 *	Per dive bout
 	*	Bout start and end
 	*	Number of dives
@@ -27,6 +28,4 @@ When completed, it will also calculate
 
 ## Usage
 
-Try it out: `(analyze-data io/data)` will calculate vertical velocity and dive index. This: `(analyze-dives (analyze-data io/data))` will summarize the dives.
-
-
+Try it out: `analyzed-dives` is a collection of all the analyzed dives in the sample input file. It's a big collection so use `(pprint (nth analyzed-dives 4))` (or any other index) to see specific dives in a readable format.
