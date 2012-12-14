@@ -58,7 +58,7 @@
 	"Splits a dive into elements - wiggles and steps. Wiggles are spans
 	of data points where velocity passes through 0 three times. Steps are
 	not yet implemented."
-	([dive]
+	([{dive :datapoints}]
 		(let [dive (calculate-thru-0 dive)]
 			(for [wiggle-boundaries
 						(->>	dive
@@ -85,7 +85,7 @@
 (defn find-steps
 	"Steps are elements where the vertical velocity dips below Tvert_vel
 	but not below 0"
-	([dive]
+	([{dive :datapoints}]
 		(for [step-boundaries
 					(->>	dive
 								(partition-by step-vel)
@@ -97,42 +97,82 @@
 				(filter #(between (:time %) start end) dive)))))
 
 (defn analyze-elements [dive]
-	(sort-by :begin (concat
-		(for [wiggle (find-wiggles dive)]
-			{:type :wiggle
-			:begin (reduce min (map :time wiggle))
-			:end (reduce max (map :time wiggle))
-			:amplitude (-
-				(reduce max (map :pressure wiggle))
-				(reduce min (map :pressure wiggle)))
-			:datapoints wiggle})
-		(for [step (find-steps dive)]
-			{:type :step
-			:begin (reduce min (map :time step))
-			:end (reduce max (map :time step))
-			:amplitude (-
-				(reduce max (map :pressure step))
-				(reduce min (map :pressure step)))
-			:datapoints step}))))
+	(sort-by :begin
+		(map
+			#(let [data			(:datapoints %)
+						begin			(reduce min (map :time data))
+						end				(reduce max (map :time data))
+						amplitude	(-
+												(reduce max (map :pressure data))
+												(reduce min (map :pressure data)))]
+				(assoc %	:begin			begin
+									:end			 	end
+									:amplitude	amplitude
+									:duration		(- end begin)))
+			(concat
+				(for [wiggle (find-wiggles dive)]
+					{	:type :wiggle
+						:datapoints wiggle})
+				(for [step (find-steps dive)]
+					{	:type :step
+						:datapoints step})))))
 
-(defn analyze-dives [dives]
-	(for [dive (partition-by :dive-idx dives)
-				:let [idx (:dive-idx (first dive))
-							elements (analyze-elements dive)]]
-		{:dive-idx idx
-		:begin (reduce min (map :time dive))
-		:end (reduce max (map :time dive))
-		:max-depth (reduce max (map :pressure dive))
-		:num-elements (count elements)
-		:num-datapoints (count dive)
-		:elements elements
-		:datapoints dive}))
+(defn bottom-phase-elements [elements ledge]
+	(->>	elements
+				(drop-while #(< (-> % :datapoints first :pressure) ledge))
+				reverse
+				(drop-while #(< (-> % :datapoints last :pressure) ledge))
+				reverse))
+
+(defn analyze-bottom-phase [dive]
+	{:pre (contains? dive :elements)}
+	(let [ledge					(* 0.75 (:max-depth dive))
+				elements			(bottom-phase-elements (:elements dive) ledge)]
+		(if (empty? elements)
+			nil ; there are no elements deeper than the ledge, then there is no bottom phase
+			(let [begin				(-> elements first :begin)
+						end					(-> elements last :end)
+						duration		(- end begin)
+						datapoints	(filter #(between (:time %) begin end) (:datapoints dive))
+						min-depth		(reduce min (map :pressure datapoints))
+						max-depth		(:max-depth dive)
+						depth-range	(- max-depth min-depth)]
+				{	:ledge						ledge
+					:elements					elements
+					:begin						begin
+					:end							end
+					:duration					duration
+					:broadness-idx		(/ duration (:duration dive))
+					:depth-range-idx	(/ depth-range (:max-depth dive))
+					:symmetry-idx			(/ (-> (filter #(= max-depth (:pressure %)) datapoints) first :time) duration)
+					:raggedness-idx		(apply + (->> elements (filter #(= (:type %) :wiggle)) (map :amplitude)))}))))
+
+(defn analyze-dives [data]
+	(for [dive (partition-by :dive-idx data)
+				:let [begin	(reduce min (map :time dive))
+							end		(reduce max (map :time dive))]]
+		((comp
+			#(assoc % :bottom-phase (analyze-bottom-phase %))
+			#(assoc % :elements (analyze-elements %)))
+		{	:dive-idx 			(:dive-idx (first dive))
+			:begin 					begin
+			:end 						end
+			:duration 			(- end begin)
+			:max-depth 			(reduce max (map :pressure dive))
+			:num-datapoints	(count dive)
+			:datapoints 		dive})))
 
 (defn analyze-data [data]
 	(-> data
 			calculate-vert-vel
 			calculate-dive-idx))
 
-(defn nth-dive [data n] (first (filter #(= n (:dive-idx %)) (analyze-dives (analyze-data data)))))
+(defn dives-with [k v ds]
+	(cond
+		(= k :element-type)
+		(filter #(some v (map :type (:elements %))) ds)
+		(= k :dive-idx)
+		(filter #(v (:dive-idx %)) ds)))
 
-
+(def analyzed-data (analyze-data io/data))
+(def analyzed-dives (analyze-dives analyzed-data))
