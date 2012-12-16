@@ -23,19 +23,12 @@
 		{:pre [(not= x0 x1)]}
 		(/ (- y1 y0) (- x1 x0))))
 
-(def vert-vel (slope :time :pressure))
-(def vert-acc (slope :time :vert-vel))
-
-(def calculate-vert-vel (calculate-forward vert-vel :vert-vel 0.0))
-(def calculate-vert-acc (calculate-forward vert-acc :vert-acc 0.0))
-
-(defn surface? [{p :pressure}]
-	(< p 0.1))
-(def submerged? (complement surface?))
+(def calculate-vert-vel (calculate-forward (slope :time :pressure) :vert-vel 0.0))
+(def calculate-vert-acc (calculate-forward (slope :time :vert-vel) :vert-acc 0.0))
 
 (defn calculate-dive-idx [data]
 	(apply concat
-		(let [dive-parts (partition-by surface? (sort-by :time data))
+		(let [dive-parts (partition-by (partial < p .1) (sort-by :time data))	; partition the data into surface and submerged phases
 					dive-idxs (interleave (iterate inc 1) (iterate dec -1))] ; dive and inter-dive periods are numbered 1, -1, 2, -2, 3, -3...
 			(for [[idx part] (select-across dive-idxs dive-parts)]
 				(map #(assoc % :dive-idx idx) part)))))
