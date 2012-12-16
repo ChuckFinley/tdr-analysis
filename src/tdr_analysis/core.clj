@@ -28,38 +28,27 @@
 
 (defn calculate-dive-idx [data]
 	(apply concat
-		(let [dive-parts (partition-by (partial < p .1) (sort-by :time data))	; partition the data into surface and submerged phases
+		(let [dive-parts (partition-by #(< 0.1 (:pressure %)) (sort-by :time data))	; partition the data into surface and submerged phases
 					dive-idxs (interleave (iterate inc 1) (iterate dec -1))] ; dive and inter-dive periods are numbered 1, -1, 2, -2, 3, -3...
 			(for [[idx part] (select-across dive-idxs dive-parts)]
 				(map #(assoc % :dive-idx idx) part)))))
 
-(defn calculate-thru-0
-	"Calculate which points have velocity pass through 0 (local extrema
-	in pressure with respect to time)"
-	([dive]
-		(loop [result []
-					 data dive
-					 trend 1]
-			(if-let [point (first data)]
-				(let [v (:vert-vel point)]
-					(recur (conj result (assoc point :thru-0 (neg? (* v trend))))
-								 (rest data)
-								 (if (zero? v) trend v)))
-				result))))
-
 (defn find-wiggles
-	"Splits a dive into elements - wiggles and steps. Wiggles are spans
-	of data points where velocity passes through 0 three times. Steps are
-	not yet implemented."
+	"Splits a dive into wiggles, defined as three or more points where the vertical
+	velocities of the first and last points are negative and the vertical velocities
+	in between are all positive or zero (at least one positive)."
 	([{dive :datapoints}]
-		(let [dive (calculate-thru-0 dive)]
-			(for [wiggle-boundaries
-						(->>	dive
-									(drop-while (complement :thru-0))
-									(filter :thru-0)
-									(partition 3 2))
-						:let [[start middle end] (map :time wiggle-boundaries)]]
-				(filter #(between (:time %) start end) dive)))))
+		(for [[neg1 pos neg2] (->>	dive
+																; split up into pos/zero & neg partitions
+																(partition-by (comp neg? :vert-vel))
+																; drop leading pos/zero partition
+																(drop-while (comp (complement neg?) :vert-vel first))
+																; group partitions into (neg pos/zero neg) super partitions
+																(partition 3 2))
+					; filter out super partitions of pattern (neg zero neg) - these are not wiggles!
+					:when (some (comp pos? :vert-vel) pos)]
+			; one neg at start and end, all pos/zero in the middle
+			(concat [(last neg1)] pos [(first neg2)]))))
 
 (defn step-vel
 	"Calculate if a point has vertical velocity in the step element range
