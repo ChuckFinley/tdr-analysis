@@ -14,8 +14,7 @@
 	(fn [data]
 		(let [pn (last data)]
 			(conj
-				(for [[p0 p1] (partition 2 1 data)]
-					(assoc p0 k (f p0 p1)))
+				(vec (map (fn [[p0 p1]] (assoc p0 k (f p0 p1))) (partition 2 1 data)))
 				(assoc pn k final)))))
 
 (defn slope [x-key y-key]
@@ -26,12 +25,15 @@
 (def calculate-vert-vel (calculate-forward (slope :time :pressure) :vert-vel 0.0))
 (def calculate-vert-acc (calculate-forward (slope :time :vert-vel) :vert-acc 0.0))
 
-(defn calculate-dive-idx [data]
+(defn calculate-dive-idx
+	"Split data into submerged and surface partitions. Number the dives 1, 2, 3... and
+	the inter-dive periods -1, -2, -3..."
+	[data]
 	(apply concat
-		(let [dive-parts (partition-by #(< 0.1 (:pressure %)) (sort-by :time data))	; partition the data into surface and submerged phases
-					dive-idxs (interleave (iterate inc 1) (iterate dec -1))] ; dive and inter-dive periods are numbered 1, -1, 2, -2, 3, -3...
-			(for [[idx part] (select-across dive-idxs dive-parts)]
-				(map #(assoc % :dive-idx idx) part)))))
+		(map
+			(fn [part idx] (map #(assoc % :dive-idx idx) part))	; assoc points in parts with dive idx
+			(partition-by #(< 0.1 (:pressure %)) data)					; partition by submerged or surface
+			(interleave (iterate inc 1) (iterate dec -1)))))		; idxs are 1 -1 2 -2 3 -3 ...
 
 (defn find-wiggles
 	"Splits a dive into wiggles, defined as three or more points where the vertical
@@ -91,8 +93,10 @@
 
 (defn bottom-phase-elements [elements ledge]
 	(->>	elements
+				; bottom phase starts with first element deeper than ledge
 				(drop-while #(< (-> % :datapoints first :pressure) ledge))
 				reverse
+				; bottom phase ends with last element deeper than ledge
 				(drop-while #(< (-> % :datapoints last :pressure) ledge))
 				reverse))
 
