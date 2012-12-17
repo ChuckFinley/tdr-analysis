@@ -50,47 +50,37 @@
 			; one neg at start and end, all pos/zero in the middle
 			(concat [(last neg1)] pos [(first neg2)]))))
 
-(defn step-vel
-	"Calculate if a point has vertical velocity in the step element range
-	i.e. 0 < vert-vel < Tvert_vel where Tvert_vel = .35"
-	([{v :vert-vel}]
-		(let [Tvert_vel 0.35]
-			(range-case v
-				[< 0]						-1
-				[0 Tvert_vel]		0
-				:else						1))))
-
-(defn step? [r1 r2 r3]
-	(let [[s1 s2 s3] (map #(step-vel (first %)) [r1 r2 r3])]
-		(and (pos? s1) (zero? s2) (pos? s3))))
-
 (defn find-steps
 	"Steps are elements where the vertical velocity dips below Tvert_vel
 	but not below 0"
 	([{dive :datapoints}]
-		(for [step-boundaries
-					(->>	dive
-								(partition-by step-vel)
-								(partition 3 1)
-								(filter #(apply step? %))
-								(map second))]
-			(let [start	(:time (first step-boundaries))
-						end		(:time (last step-boundaries))]
-				(filter #(between (:time %) start end) dive)))))
+		(let [Tvert-vel	0.35
+					step-vel	#(if (neg? %) -1 (if (> % Tvert-vel) 1 0))
+					step?			(fn [[[{v1 :vert-vel} & v1s] [{v2 :vert-vel} & v2s] [{v3 :vert-vel} & v3s]]]
+											(and (pos? (step-vel v1)) (zero? (step-vel v2)) (pos? (step-vel v3))))]
+			(->>	dive
+						; partition by vertical velocity compared to (0, Tvert-vel)
+						(partition-by (comp step-vel :vert-vel))
+						; group partitions into triplets
+						(partition 3 1)
+						; a step is a sequence of points in (0, Tvert-vel) with > Tvert-vel on each side
+						(filter step?)
+						; the middle partition in the triplet is the step
+						(map second)))))
 
 (defn analyze-elements [dive]
 	(sort-by :begin
 		(map
-			#(let [data			(:datapoints %)
-						begin			(reduce min (map :time data))
-						end				(reduce max (map :time data))
-						amplitude	(-
-												(reduce max (map :pressure data))
-												(reduce min (map :pressure data)))]
-				(assoc %	:begin			begin
-									:end			 	end
-									:amplitude	amplitude
-									:duration		(- end begin)))
+			#(let [	data			(:datapoints %)
+							begin			(reduce min (map :time data))
+							end				(reduce max (map :time data))
+							amplitude	(-
+													(reduce max (map :pressure data))
+													(reduce min (map :pressure data)))]
+			(assoc %	:begin			begin
+								:end			 	end
+								:amplitude	amplitude
+								:duration		(- end begin)))
 			(concat
 				(for [wiggle (find-wiggles dive)]
 					{	:type :wiggle
