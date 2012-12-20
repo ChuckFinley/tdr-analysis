@@ -14,16 +14,17 @@
 	(fn [data]
 		(let [pn (last data)]
 			(conj
-				(vec (map (fn [[p0 p1]] (assoc p0 k (f p0 p1))) (partition 2 1 data)))
+				(vec (map (fn [p0 p1] (assoc p0 k (f p0 p1))) data (next data)))
 				(assoc pn k final)))))
 
 (defn slope [x-key y-key]
 	(fn [{x0 x-key y0 y-key} {x1 x-key y1 y-key}]
 		{:pre [(not= x0 x1)]}
-		(/ (- y1 y0) (- x1 x0))))
+		(if (some nil? [x0 y0 x1 y1]) nil
+			(/ (- y1 y0) (- x1 x0)))))
 
-(def calculate-vert-vel (calculate-forward (slope :time :pressure) :vert-vel 0.0))
-(def calculate-vert-acc (calculate-forward (slope :time :vert-vel) :vert-acc 0.0))
+(def calculate-vert-vel (calculate-forward (slope :elapsed :pressure) :vert-vel 0.0))
+(def calculate-vert-acc (calculate-forward (slope :elapsed :vert-vel) :vert-acc 0.0))
 
 (defn calculate-dive-idx
 	"Split data into submerged and surface partitions. Number the dives 1, 2, 3... and
@@ -74,8 +75,8 @@
 	(sort-by :begin
 		(map
 			#(let [	data			(:datapoints %)
-							begin			(reduce min (map :time data))
-							end				(reduce max (map :time data))
+							begin			(reduce min (map :elapsed data))
+							end				(reduce max (map :elapsed data))
 							amplitude	(-
 													(reduce max (map :pressure data))
 													(reduce min (map :pressure data)))]
@@ -109,7 +110,7 @@
 			(let [begin				(-> elements first :begin)
 						end					(-> elements last :end)
 						duration		(- end begin)
-						datapoints	(filter #(between (:time %) begin end) (:datapoints dive))
+						datapoints	(filter #(between (:elapsed %) begin end) (:datapoints dive))
 						min-depth		(reduce min (map :pressure datapoints))
 						max-depth		(:max-depth dive)
 						depth-range	(- max-depth min-depth)]
@@ -120,13 +121,13 @@
 					:duration					duration
 					:broadness-idx		(/ duration (:duration dive))
 					:depth-range-idx	(/ depth-range (:max-depth dive))
-					:symmetry-idx			(/ (-> (filter #(= max-depth (:pressure %)) datapoints) first :time) duration)
+					:symmetry-idx			(/ (-> (filter #(= max-depth (:pressure %)) datapoints) first :elapsed) duration)
 					:raggedness-idx		(apply + (->> elements (filter #(= (:type %) :wiggle)) (map :amplitude)))}))))
 
 (defn analyze-dives [data]
 	(for [dive (partition-by :dive-idx data)
-				:let [begin	(reduce min (map :time dive))
-							end		(reduce max (map :time dive))]]
+				:let [begin	(reduce min (map :elapsed dive))
+							end		(reduce max (map :elapsed dive))]]
 		((comp
 			#(assoc % :bottom-phase (analyze-bottom-phase %))
 			#(assoc % :elements (analyze-elements %)))
@@ -150,5 +151,5 @@
 		(= k :dive-idx)
 		(filter #(v (:dive-idx %)) ds)))
 
-(def analyzed-data (analyze-data io/data))
-(def analyzed-dives (analyze-dives analyzed-data))
+;(def analyzed-data (analyze-data io/data))
+;(def analyzed-dives (analyze-dives analyzed-data))
