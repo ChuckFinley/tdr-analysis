@@ -9,7 +9,7 @@
 
 (def log1 "assets/2012/869/LAT150_0869_120819_142105_00.csv")
 (def log2 "assets/2012/869/LAT150_0869_120819_142105_01.csv")
-(def log3 "assets/2012/869/LAT150_0869_120819_142105_02.csv")
+(def log3 "assets/2012/869/LAT150_0869_120819_142105_02.csv")		; no pressure, not used
 
 (defn parse-csv
 	"Microsoft puts carriage returns at the end of lines in CSV files
@@ -48,10 +48,7 @@
 
 (defn get-logs
 	([]
-		(get-logs
-			["00"								"01"							"02"]
-			[log1 							log2 							log3]
-			[[:pressure :temp]	[:pressure :temp]	[:temp :wetdry]]))
+		(get-logs ["00"	"01"] [log1 log2] [[:pressure :temp]	[:pressure :temp]]))
 	([log-ids filenames fields]
 		(->>
 			(map

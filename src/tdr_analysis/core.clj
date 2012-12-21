@@ -20,8 +20,7 @@
 (defn slope [x-key y-key]
 	(fn [{x0 x-key y0 y-key} {x1 x-key y1 y-key}]
 		{:pre [(not= x0 x1)]}
-		(if (some nil? [x0 y0 x1 y1]) nil
-			(/ (- y1 y0) (- x1 x0)))))
+		(/ (- y1 y0) (- x1 x0))))
 
 (def calculate-vert-vel (calculate-forward (slope :elapsed :pressure) :vert-vel 0.0))
 (def calculate-vert-acc (calculate-forward (slope :elapsed :vert-vel) :vert-acc 0.0))
@@ -33,8 +32,8 @@
 	(apply concat
 		(map
 			(fn [part idx] (map #(assoc % :dive-idx idx) part))	; assoc points in parts with dive idx
-			(partition-by #(< 0.1 (:pressure %)) data)					; partition by submerged or surface
-			(interleave (iterate inc 1) (iterate dec -1)))))		; idxs are 1 -1 2 -2 3 -3 ...
+			(partition-by #(< 0.1 (:pressure %)) data)	; partition by submerged or surface
+			(interleave (iterate dec -1) (iterate inc 1)))))		; idxs are 1 -1 2 -2 3 -3 ...
 
 (defn find-wiggles
 	"Splits a dive into wiggles, defined as three or more points where the vertical
@@ -151,5 +150,5 @@
 		(= k :dive-idx)
 		(filter #(v (:dive-idx %)) ds)))
 
-;(def analyzed-data (analyze-data io/data))
-;(def analyzed-dives (analyze-dives analyzed-data))
+(def analyzed-data (analyze-data io/data))
+(def analyzed-dives (analyze-dives analyzed-data))
